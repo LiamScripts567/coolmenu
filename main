@@ -1,0 +1,365 @@
+local TweenService = game:GetService("TweenService")
+local RunService = game:GetService("RunService")
+
+local Players = game:GetService("Players")
+local Player = Players.LocalPlayer
+
+local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
+local key = ("%se%su%sol%d"):format(unpack({"m", "n", "Co", 7}))
+
+function GetPlayer(Name)
+    if not Name or Name:match("^%s*$") then
+        return nil
+    end
+
+    Name = Name:lower():gsub("^%s*(.-)%s*$", "%1") -- trim whitespace
+
+    local allPlayers = Players:GetPlayers()
+    table.remove(allPlayers, table.find(allPlayers, Player)) -- remove local player
+
+    -- random player
+    if Name == "random" then
+        if #allPlayers == 0 then
+            return nil
+        end
+        return allPlayers[math.random(#allPlayers)]
+    end
+
+    if Name == "me" then
+        return Player
+    end
+
+    -- search by partial name or display name
+    for _, p in ipairs(allPlayers) do
+        if p.Name:lower():match("^" .. Name) or p.DisplayName:lower():match("^" .. Name) then
+            return p
+        end
+    end
+
+    return nil
+end
+
+function Fling(TargetPlayer)
+    if not TargetPlayer then
+        Rayfield:Notify({
+            Title = "Error Occurred",
+            Content = "Player doesn't exist.",
+            Image = "user-x"
+        })
+        return
+    end
+
+    if TargetPlayer == Player then
+        Rayfield:Notify({
+            Title = "Error Occurred",
+            Content = "You cannot fling yourself.",
+            Image = "user-x"
+        })
+        return
+    end
+
+    local Character = Player.Character
+    local Humanoid = Character and Character:FindFirstChildOfClass("Humanoid")
+    local RootPart = Humanoid and Humanoid.RootPart
+    local TCharacter = TargetPlayer.Character
+    local THumanoid = TCharacter and TCharacter:FindFirstChildOfClass("Humanoid")
+    local TRootPart = THumanoid and THumanoid.RootPart
+    local THead = TCharacter and TCharacter:FindFirstChild("Head")
+    local Accessory = TCharacter and TCharacter:FindFirstChildOfClass("Accessory")
+    local Handle = Accessory and Accessory:FindFirstChild("Handle")
+
+    if not (Character and Humanoid and RootPart) then
+        Rayfield:Notify({
+            Title = "Error Occurred",
+            Content = "Your character is not ready.",
+            Image = "user-x"
+        })
+        return
+    end
+
+    if RootPart.Velocity.Magnitude < 50 then
+        getgenv().OldPos = RootPart.CFrame
+    end
+
+    if THead then
+        workspace.CurrentCamera.CameraSubject = THead
+    elseif Handle then
+        workspace.CurrentCamera.CameraSubject = Handle
+    elseif THumanoid and TRootPart then
+        workspace.CurrentCamera.CameraSubject = THumanoid
+    end
+
+    if not TCharacter:FindFirstChildWhichIsA("BasePart") then
+        Rayfield:Notify({
+            Title = "Error Occurred",
+            Content = "Target is missing BaseParts.",
+            Image = "user-x"
+        })
+        return
+    end
+
+    local function FPos(BasePart, Pos, Ang)
+        RootPart.CFrame = CFrame.new(BasePart.Position) * Pos * Ang
+        Character:SetPrimaryPartCFrame(CFrame.new(BasePart.Position) * Pos * Ang)
+        RootPart.Velocity = Vector3.new(9e7, 9e8, 9e7)
+        RootPart.RotVelocity = Vector3.new(9e8, 9e8, 9e8)
+    end
+
+    local function SFBasePart(BasePart)
+        local TimeToWait = 2
+        local Time = tick()
+        local Angle = 0
+
+        repeat
+            if RootPart and THumanoid then
+                if BasePart.Velocity.Magnitude < 50 then
+                    Angle = Angle + 100
+                    local positions = {
+                        CFrame.new(0,1.5,0) + THumanoid.MoveDirection * BasePart.Velocity.Magnitude/1.25,
+                        CFrame.new(0,-1.5,0) + THumanoid.MoveDirection * BasePart.Velocity.Magnitude/1.25,
+                        CFrame.new(2.25,1.5,-2.25) + THumanoid.MoveDirection * BasePart.Velocity.Magnitude/1.25,
+                        CFrame.new(-2.25,-1.5,2.25) + THumanoid.MoveDirection * BasePart.Velocity.Magnitude/1.25
+                    }
+                    for _, pos in ipairs(positions) do
+                        FPos(BasePart, pos, CFrame.Angles(math.rad(Angle),0,0))
+                        task.wait()
+                    end
+                else
+                    FPos(BasePart, CFrame.new(0,1.5,TRootPart.Velocity.Magnitude/1.25), CFrame.Angles(math.rad(90),0,0))
+                    task.wait()
+                    FPos(BasePart, CFrame.new(0,-1.5,-TRootPart.Velocity.Magnitude/1.25), CFrame.Angles(0,0,0))
+                    task.wait()
+                end
+            else
+                break
+            end
+        until BasePart.Velocity.Magnitude > 500 or BasePart.Parent ~= TargetPlayer.Character or TargetPlayer.Parent ~= Players or TargetPlayer.Character ~= TCharacter or THumanoid.Sit or Humanoid.Health <= 0 or tick() > Time + TimeToWait
+    end
+
+    workspace.FallenPartsDestroyHeight = math.huge
+
+    local BV = Instance.new("BodyVelocity")
+    BV.Name = "EpixVel"
+    BV.Parent = RootPart
+    BV.Velocity = Vector3.new(9e8, 9e8, 9e8)
+    BV.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
+
+    Humanoid:SetStateEnabled(Enum.HumanoidStateType.Seated, false)
+
+    if TRootPart and THead then
+        if (TRootPart.CFrame.p - THead.CFrame.p).Magnitude > 5 then
+            SFBasePart(THead)
+        else
+            SFBasePart(TRootPart)
+        end
+    elseif TRootPart then
+        SFBasePart(TRootPart)
+    elseif THead then
+        SFBasePart(THead)
+    elseif Handle then
+        SFBasePart(Handle)
+    else
+        Rayfield:Notify({
+            Title = "Error Occurred",
+            Content = "Target has nothing to fling.",
+            Image = "user-x"
+        })
+        BV:Destroy()
+        return
+    end
+
+    BV:Destroy()
+    Humanoid:SetStateEnabled(Enum.HumanoidStateType.Seated, true)
+    workspace.CurrentCamera.CameraSubject = Humanoid
+
+    repeat
+        RootPart.CFrame = getgenv().OldPos * CFrame.new(0,0.5,0)
+        Character:SetPrimaryPartCFrame(getgenv().OldPos * CFrame.new(0,0.5,0))
+        Humanoid:ChangeState("GettingUp")
+        for _, x in pairs(Character:GetChildren()) do
+            if x:IsA("BasePart") then
+                x.Velocity = Vector3.new()
+                x.RotVelocity = Vector3.new()
+            end
+        end
+        task.wait()
+    until (RootPart.Position - getgenv().OldPos.p).Magnitude < 25
+
+    workspace.FallenPartsDestroyHeight = getgenv().FPDH or 0
+end
+
+-- Rayfield menu setup
+local Window = Rayfield:CreateWindow({
+    Name = "cool menu",
+    Icon = 0,
+    LoadingTitle = "Rayfield Interface Suite",
+    LoadingSubtitle = "by Sirius",
+    Theme = "Default",
+    DisableRayfieldPrompts = false,
+    DisableBuildWarnings = false,
+    ConfigurationSaving = {Enabled = false, FolderName = nil, FileName = "Big Hub"},
+    Discord = {Enabled = true, Invite = "noinvitelink", RememberJoins = true},
+    KeySystem = true,
+    KeySettings = {
+        Title = "cool menu",
+        Subtitle = "Key System",
+        Note = "",
+        FileName = "CoolMenu-Key",
+        SaveKey = true,
+        GrabKeyFromSite = false,
+        Key = {key}
+    }
+})
+
+-- Players tab
+local PlayersTab = Window:CreateTab("Players", "user")
+local TargetPlayer = nil
+local PlayerDestroyingCon = nil
+
+local Input = PlayersTab:CreateInput({
+    Name = "Player",
+    CurrentValue = "",
+    PlaceholderText = "(Doesn't have to be full name)",
+    RemoveTextAfterFocusLost = false,
+    Flag = nil,
+    Callback = function(Text)
+        TargetPlayer = GetPlayer(Text)
+
+        if TargetPlayer then
+            local nameStr
+            if TargetPlayer.DisplayName == TargetPlayer.Name then
+                nameStr = TargetPlayer.Name
+            else
+                nameStr = ("%s (%s)"):format(TargetPlayer.DisplayName, TargetPlayer.Name)
+            end
+
+            Rayfield:Notify({
+                Title = "Notification",
+                Content = ("Player %s found!"):format(nameStr),
+                Image = "user-check"
+            })
+
+            if PlayerDestroyingCon then PlayerDestroyingCon:Disconnect() end
+            PlayerDestroyingCon = TargetPlayer.Destroying:Connect(function()
+                TargetPlayer = nil
+                Rayfield:Notify({
+                    Title = "Notification",
+                    Content = "The selected player has left.",
+                    Image = "user-x"
+                })
+            end)
+        else
+            Rayfield:Notify({
+                Title = "Error Occurred",
+                Content = "No player found with that name.",
+                Image = "user-x"
+            })
+        end
+    end
+})
+
+-- Fling button
+local Button = PlayersTab:CreateButton({
+    Name = "Fling",
+    Callback = function()
+        Fling(TargetPlayer)
+    end,
+})
+
+local GotoButton = PlayersTab:CreateButton({
+    Name = "Goto player",
+    Callback = function()
+        if not TargetPlayer or not TargetPlayer.Character or not TargetPlayer.Character:FindFirstChild("HumanoidRootPart") then
+            Rayfield:Notify({Title = "Error Occurred", Content = "No valid target to goto.", Image = "user-x"})
+            return
+        end
+        if TargetPlayer == Player then
+            Rayfield:Notify({Title = "Error Occurred", Content = "You cannot goto yourself.", Image = "user-x"})
+            return
+        end
+
+        local Root = Player.Character and Player.Character:FindFirstChild("HumanoidRootPart")
+        if not Root then
+            Rayfield:Notify({Title = "Error Occurred", Content = "Your character is not ready.", Image = "user-x"})
+            return
+        end
+
+        Root.CFrame = TargetPlayer.Character.HumanoidRootPart.CFrame + Vector3.new(0, 3, 0)
+        Rayfield:Notify({
+            Title = "Notification",
+            Content = ("Teleported to %s."):format(TargetPlayer.DisplayName or TargetPlayer.Name),
+            Image = "user-check"
+        })
+    end
+})
+
+local AntiGotoButton = PlayersTab:CreateButton({
+    Name = "Goto player (Anti-Cheat)",
+    Callback = function()
+        if not TargetPlayer or not TargetPlayer.Character or not TargetPlayer.Character:FindFirstChild("HumanoidRootPart") then
+            Rayfield:Notify({Title = "Error Occurred", Content = "No valid target to goto.", Image = "user-x"})
+            return
+        end
+        if TargetPlayer == Player then
+            Rayfield:Notify({Title = "Error Occurred", Content = "You cannot goto yourself.", Image = "user-x"})
+            return
+        end
+
+        local Char = Player.Character
+        local HRP = Char and Char:FindFirstChild("HumanoidRootPart")
+        local Humanoid = Char and Char:FindFirstChildOfClass("Humanoid")
+        local TargetHRP = TargetPlayer.Character:FindFirstChild("HumanoidRootPart")
+
+        if not HRP or not Humanoid then
+            Rayfield:Notify({Title = "Error Occurred", Content = "Your character is not ready.", Image = "user-x"})
+            return
+        end
+
+        local walkspeed = Humanoid.WalkSpeed
+        local distance = (TargetHRP.Position - HRP.Position).Magnitude
+        local time = distance / (walkspeed > 0 and walkspeed or 16)
+
+        local tween = TweenService:Create(
+            HRP,
+            TweenInfo.new(time, Enum.EasingStyle.Linear),
+            {CFrame = TargetHRP.CFrame + Vector3.new(0, 3, 0)}
+        )
+
+        tween:Play()
+        local Con = RunService.RenderStepped:Connect(function()
+            HRP.Velocity = Vector3.new()
+        end)
+
+        tween.Completed:Connect(function()
+            Con:Disconnect()
+            Rayfield:Notify({
+                Title = "Notification",
+                Content = ("Arrived at %s."):format(TargetPlayer.DisplayName or TargetPlayer.Name),
+                Image = "user-check"
+            })
+        end)
+    end
+})
+
+local Button = PlayersTab:CreateButton({
+	Name = "Mass report",
+	Callback = function()
+		if not TargetPlayer then
+			Rayfield:Notify({
+				Title = "Notification",
+				Content = "Player doesn't exist.",
+				Image = "user-x"
+			})
+			return
+		end
+		if TargetPlayer == Player then
+			Rayfield:Notify({
+				Title = "Notification",
+				Content = "You cannot report yourself.",
+				Image = "user-x"
+			})
+			return
+		end
+		Players:ReportAbuse(TargetPlayer, "Bullying", "Kept saying \"LOL\" after I said my mother had suffered Cancer and died.") -- morbid report to get them banned or warned
+    end,
+})
